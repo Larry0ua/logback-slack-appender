@@ -1,5 +1,9 @@
 package com.github.maricn.logback;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Layout;
+import ch.qos.logback.core.LayoutBase;
+import ch.qos.logback.core.UnsynchronizedAppenderBase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -7,21 +11,18 @@ import java.io.OutputStream;
 import java.io.StringWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLEncoder;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.Layout;
-import ch.qos.logback.core.LayoutBase;
-import ch.qos.logback.core.UnsynchronizedAppenderBase;
+import static java.net.URLEncoder.encode;
+import static java.util.Collections.singletonList;
 
 public class SlackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
 
     private final static String API_URL = "https://slack.com/api/chat.postMessage";
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String POST = "POST";
     private static Layout<ILoggingEvent> defaultLayout = new LayoutBase<ILoggingEvent>() {
         public String doLayout(ILoggingEvent event) {
             return "-- [" + event.getLevel() + "]" +
@@ -38,6 +39,7 @@ public class SlackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
     private Layout<ILoggingEvent> layout = defaultLayout;
 
     private int timeout = 30_000;
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void append(final ILoggingEvent evt) {
@@ -57,7 +59,6 @@ public class SlackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
         String[] parts = layout.doLayout(evt).split("\n", 2);
 
         Map<String, Object> message = new HashMap<>();
-        message.put("channel", channel);
         message.put("username", username);
         message.put("icon_emoji", iconEmoji);
         message.put("text", parts[0]);
@@ -66,12 +67,10 @@ public class SlackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
         if (parts.length > 1) {
             Map<String, String> attachment = new HashMap<>();
             attachment.put("text", parts[1]);
-            message.put("attachments", Arrays.asList(attachment));
+            message.put("attachments", singletonList(attachment));
         }
 
-        ObjectMapper objectMapper = new ObjectMapper();
         final byte[] bytes = objectMapper.writeValueAsBytes(message);
-
         postMessage(webhookUri, "application/json", bytes);
     }
 
@@ -80,28 +79,27 @@ public class SlackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
         requestParams.append("token=").append(token).append("&");
 
         String[] parts = layout.doLayout(evt).split("\n", 2);
-        requestParams.append("text=").append(URLEncoder.encode(parts[0], "UTF-8")).append('&');
+        requestParams.append("text=").append(encode(parts[0], "UTF-8")).append('&');
 
         // Send the lines below the first line as an attachment.
         if (parts.length > 1) {
             Map<String, String> attachment = new HashMap<>();
             attachment.put("text", parts[1]);
-            List<Map<String, String>> attachments = Collections.singletonList(attachment);
-            String json = new ObjectMapper().writeValueAsString(attachments);
-            requestParams.append("attachments=").append(URLEncoder.encode(json, "UTF-8")).append('&');
+            List<Map<String, String>> attachments = singletonList(attachment);
+            String json = objectMapper.writeValueAsString(attachments);
+            requestParams.append("attachments=").append(encode(json, "UTF-8")).append('&');
         }
         if (channel != null) {
-            requestParams.append("channel=").append(URLEncoder.encode(channel, "UTF-8")).append('&');
+            requestParams.append("channel=").append(encode(channel, "UTF-8")).append('&');
         }
         if (username != null) {
-            requestParams.append("username=").append(URLEncoder.encode(username, "UTF-8")).append('&');
+            requestParams.append("username=").append(encode(username, "UTF-8")).append('&');
         }
         if (iconEmoji != null) {
-            requestParams.append("icon_emoji=").append(URLEncoder.encode(iconEmoji, "UTF-8"));
+            requestParams.append("icon_emoji=").append(encode(iconEmoji, "UTF-8"));
         }
 
         final byte[] bytes = requestParams.toString().getBytes("UTF-8");
-
         postMessage(API_URL, "application/x-www-form-urlencoded", bytes);
     }
 
@@ -110,9 +108,9 @@ public class SlackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
         conn.setConnectTimeout(timeout);
         conn.setReadTimeout(timeout);
         conn.setDoOutput(true);
-        conn.setRequestMethod("POST");
+        conn.setRequestMethod(POST);
         conn.setFixedLengthStreamingMode(bytes.length);
-        conn.setRequestProperty("Content-Type", contentType);
+        conn.setRequestProperty(CONTENT_TYPE, contentType);
 
         final OutputStream os = conn.getOutputStream();
         os.write(bytes);
