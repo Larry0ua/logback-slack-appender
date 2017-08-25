@@ -1,5 +1,9 @@
 package com.github.maricn.logback;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Layout;
+import ch.qos.logback.core.LayoutBase;
+import ch.qos.logback.core.UnsynchronizedAppenderBase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -8,16 +12,10 @@ import java.io.StringWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.Layout;
-import ch.qos.logback.core.LayoutBase;
-import ch.qos.logback.core.UnsynchronizedAppenderBase;
 
 public class SlackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
 
@@ -37,6 +35,8 @@ public class SlackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
     private String iconEmoji;
     private Layout<ILoggingEvent> layout = defaultLayout;
 
+    private URL slackPostMessageUrl;
+    private URL slackWebhookUrl;
     private int timeout = 30_000;
 
     @Override
@@ -66,7 +66,7 @@ public class SlackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
         if (parts.length > 1) {
             Map<String, String> attachment = new HashMap<>();
             attachment.put("text", parts[1]);
-            message.put("attachments", Arrays.asList(attachment));
+            message.put("attachments", Collections.singletonList(attachment));
         }
 
         ObjectMapper objectMapper = new ObjectMapper();
